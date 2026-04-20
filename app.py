@@ -1,8 +1,11 @@
 from flask import Flask, render_template, request, jsonify
 import paho.mqtt.publish as publish
+import paho.mqtt.subscribe as subscribe
 import json
 import time
 import threading
+from datetime import datetime
+from collections import deque
 
 app = Flask(__name__)
 
@@ -10,6 +13,7 @@ BROKER      = "broker.hivemq.com"
 PORT        = 1883
 TOPIC       = "home/led/FINAL/UNIQUE"
 WIFI_TOPIC  = "home/led/FINAL/UNIQUE/wifi"
+DEBUG_TOPIC = "home/led/FINAL/UNIQUE/debug"
 
 # ── state tracker ──────────────────────────────────────────────
 state = {
@@ -26,6 +30,10 @@ state = {
     "candle_active": False,
 }
 
+# ── debug log ──────────────────────────────────────────────────
+debug_log = deque(maxlen=100)  # Store last 100 debug messages
+debug_lock = threading.Lock()
+
 def mqtt_send(payload_str):
     try:
         publish.single(
@@ -37,6 +45,35 @@ def mqtt_send(payload_str):
         )
     except Exception as e:
         print(f"MQTT error: {e}")
+
+def add_debug_log(message):
+    """Add a message to the debug log with timestamp"""
+    with debug_lock:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        debug_log.append({"time": timestamp, "msg": message})
+        print(f"[DEBUG] {timestamp} {message}")
+
+def listen_debug_messages():
+    """Background thread to listen for debug messages from ESP32"""
+    while True:
+        try:
+            msg = subscribe.simple(
+                DEBUG_TOPIC,
+                hostname=BROKER,
+                port=PORT,
+                keepalive=10,
+                msg_count=1
+            )
+            if msg and msg.payload:
+                payload = msg.payload.decode()
+                add_debug_log(payload)
+        except Exception as e:
+            print(f"Debug listener error: {e}")
+            time.sleep(2)
+
+# Start debug listener in background
+debug_thread = threading.Thread(target=listen_debug_messages, daemon=True)
+debug_thread.start()
 
 @app.route("/")
 def index():
@@ -229,6 +266,12 @@ def set_wifi():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route("/debug")
+def get_debug_log():
+    """Return the debug log as JSON"""
+    with debug_lock:
+        return jsonify({"logs": list(debug_log)})
 
 @app.route("/state")
 def get_state():

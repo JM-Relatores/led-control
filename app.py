@@ -6,9 +6,10 @@ import threading
 
 app = Flask(__name__)
 
-BROKER = "broker.hivemq.com"
-PORT   = 1883
-TOPIC  = "home/led/FINAL/UNIQUE"
+BROKER      = "broker.hivemq.com"
+PORT        = 1883
+TOPIC       = "home/led/FINAL/UNIQUE"
+WIFI_TOPIC  = "home/led/FINAL/UNIQUE/wifi"
 
 # ── state tracker ──────────────────────────────────────────────
 state = {
@@ -202,6 +203,32 @@ def schedule_alarm(minutes):
         state["alarm_active"] = False
     t = threading.Thread(target=alarm_loop, daemon=True)
     t.start()
+
+@app.route("/wifi", methods=["POST"])
+def set_wifi():
+    data = request.get_json()
+    ssid = data.get("ssid", "").strip()
+    password = data.get("password", "")
+
+    if not ssid:
+        return jsonify({"status": "error", "message": "SSID cannot be empty"}), 400
+
+    payload = json.dumps({"ssid": ssid, "pass": password})
+
+    try:
+        publish.single(
+            WIFI_TOPIC,
+            payload,
+            hostname=BROKER,
+            port=PORT,
+            keepalive=10,
+        )
+        return jsonify({
+            "status": "ok",
+            "message": f"WiFi config sent to ESP32. It will reboot and connect to '{ssid}'."
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route("/state")
 def get_state():

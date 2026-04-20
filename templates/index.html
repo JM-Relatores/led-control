@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>LUMINA — LED Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="ambient-bg" id="ambientBg"></div>
+
+<div class="app">
+
+  <!-- ── header ── -->
+  <header>
+    <div class="logo">LUMINA</div>
+    <div class="header-right">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-label" id="statusLabel">CONNECTING</span>
+      <button class="power-btn" id="powerBtn" onclick="toggle()" title="Toggle power">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 2v6M4.93 4.93l4.24 4.24M19.07 4.93l-4.24 4.24M2 12h6M20 12h-6M6.34 17.66l4.24-4.24M17.66 17.66l-4.24-4.24M12 22a10 10 0 100-20 10 10 0 000 20z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ── voice banner ── -->
+  <div class="voice-banner" id="voiceBanner" onclick="startVoice()">
+    <div class="voice-icon" id="voiceIcon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+        <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+    </div>
+    <div>
+      <div class="voice-title">Voice Control</div>
+      <div class="voice-hint" id="voiceHint">Tap to speak a command</div>
+    </div>
+    <div class="voice-waves" id="voiceWaves">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <!-- ── big color wheel ── -->
+  <section class="section">
+    <div class="section-label">COLOR</div>
+    <div class="color-wheel-wrap">
+      <canvas id="colorWheel" width="260" height="260"></canvas>
+      <div class="color-center">
+        <div class="color-preview" id="colorPreview"></div>
+      </div>
+    </div>
+    <div class="hex-row">
+      <input type="color" id="hexPicker" value="#ff8c00" oninput="pickColor(this.value)" class="hex-input">
+      <span class="hex-label" id="hexLabel">#FF8C00</span>
+      <button class="btn-sm" onclick="copyHex()">COPY</button>
+      <button class="btn-sm" onclick="randomColor()">RANDOM</button>
+    </div>
+  </section>
+
+  <!-- ── brightness & temp ── -->
+  <section class="section two-col">
+    <div>
+      <div class="section-label">BRIGHTNESS</div>
+      <div class="slider-wrap">
+        <input type="range" class="slider bri-slider" id="briSlider" min="1" max="255" value="255"
+               oninput="updateBri(this.value)" onchange="sendBri(this.value)">
+        <span class="slider-val" id="briVal">255</span>
+      </div>
+    </div>
+    <div>
+      <div class="section-label">COLOR TEMP</div>
+      <div class="slider-wrap">
+        <input type="range" class="slider temp-slider" id="tempSlider" min="0" max="255" value="0"
+               oninput="updateTemp(this.value)" onchange="sendTemp(this.value)">
+        <span class="slider-val" id="tempVal">WARM</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── scenes ── -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-label">SCENES</div>
+      <button class="stop-btn" id="sceneStopBtn" onclick="stopScene()" style="display:none">■ CLEAR</button>
+    </div>
+    <div class="scene-grid">
+      <button class="scene-btn" data-scene="sunset"    onclick="scene('sunset')">🌅 Sunset</button>
+      <button class="scene-btn" data-scene="ocean"     onclick="scene('ocean')">🌊 Ocean</button>
+      <button class="scene-btn" data-scene="forest"    onclick="scene('forest')">🌿 Forest</button>
+      <button class="scene-btn" data-scene="romantic"  onclick="scene('romantic')">🌹 Romance</button>
+      <button class="scene-btn" data-scene="focus"     onclick="scene('focus')">🧠 Focus</button>
+      <button class="scene-btn" data-scene="sleep"     onclick="scene('sleep')">🌙 Sleep</button>
+      <button class="scene-btn" data-scene="morning"   onclick="scene('morning')">☀️ Morning</button>
+      <button class="scene-btn" data-scene="cinema"    onclick="scene('cinema')">🎬 Cinema</button>
+      <button class="scene-btn" data-scene="gaming"    onclick="scene('gaming')">🎮 Gaming</button>
+      <button class="scene-btn" data-scene="rave"      onclick="scene('rave')">🔮 Rave</button>
+      <button class="scene-btn" data-scene="christmas" onclick="scene('christmas')">🎄 Xmas</button>
+      <button class="scene-btn" data-scene="halloween" onclick="scene('halloween')">🎃 Halloween</button>
+    </div>
+  </section>
+
+  <!-- ── effects ── -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-label">EFFECTS</div>
+      <button class="stop-btn" onclick="fx(0)">■ SOLID</button>
+    </div>
+    <div class="fx-grid">
+      <!-- FX IDs for WLED 0.14 — corrected 2025 -->
+      <!-- FX  8 = Colorloop (whole strip cycles hue as one colour) -->
+      <!-- FX  9 = Rainbow Cycle (each LED different colour, pal:11 = Rainbow palette) -->
+      <!-- FX 13 = Theater Chase (FX 15 is Running Lights, not Theater) -->
+      <!-- FX 20 = Sparkle      (FX 65 is Two Dots, not Sparkle) -->
+      <!-- FX 23 = Strobe       (FX 46 is Circus Combustus, not Strobe) -->
+      <button class="fx-btn active" data-fx="0"  onclick="fx(0)">Solid</button>
+      <button class="fx-btn" data-fx="8"  onclick="fx(8)">Colorloop</button>
+      <button class="fx-btn" data-fx="9"  onclick="fx(9,11)">Rainbow</button>
+      <button class="fx-btn" data-fx="28" onclick="fx(28)">Wave</button>
+      <button class="fx-btn" data-fx="38" onclick="fx(38)">Chase</button>
+      <button class="fx-btn" data-fx="45" onclick="fx(45)">Fire 2012</button>
+      <button class="fx-btn" data-fx="91" onclick="fx(91)">Fireworks</button>
+      <button class="fx-btn" data-fx="56" onclick="fx(56)">Candle</button>
+      <button class="fx-btn" data-fx="23" onclick="fx(23)">Strobe</button>
+      <button class="fx-btn" data-fx="20" onclick="fx(20)">Sparkle</button>
+      <button class="fx-btn" data-fx="13" onclick="fx(13)">Theater</button>
+      <button class="fx-btn" data-fx="2"  onclick="fx(2)">Breathe</button>
+    </div>
+    <div class="fx-sliders">
+      <div class="slider-wrap">
+        <span class="slider-lbl">SPEED</span>
+        <input type="range" class="slider" id="speedSlider" min="0" max="255" value="128"
+               oninput="document.getElementById('speedVal').textContent=this.value"
+               onchange="send('SPEED:'+this.value)">
+        <span class="slider-val" id="speedVal">128</span>
+      </div>
+      <div class="slider-wrap">
+        <span class="slider-lbl">INTENSITY</span>
+        <input type="range" class="slider" id="intSlider" min="0" max="255" value="128"
+               oninput="document.getElementById('intVal').textContent=this.value"
+               onchange="send('INTENSITY:'+this.value)">
+        <span class="slider-val" id="intVal">128</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── fun features ── -->
+  <section class="section">
+    <div class="section-label">FUN STUFF</div>
+    <div class="fun-grid">
+
+      <!-- Party Mode -->
+      <div class="fun-card" id="partyCard">
+        <div class="fun-card-title">🪩 PARTY MODE</div>
+        <div class="fun-card-sub">Cycles colors like a disco</div>
+        <div class="fun-btn-row">
+          <button class="fun-btn party-btn" id="partyStartBtn" onclick="startParty()">▶ START</button>
+          <button class="fun-btn stop-fun-btn" id="partyStopBtn" onclick="stopParty()" disabled>■ STOP</button>
+        </div>
+      </div>
+
+      <!-- Wake-up Alarm -->
+      <div class="fun-card" id="alarmCard">
+        <div class="fun-card-title">⏰ WAKE-UP ALARM</div>
+        <div class="fun-card-sub">Sunrise fade-in</div>
+        <div class="alarm-row">
+          <input type="number" id="alarmMins" value="30" min="1" max="120" class="alarm-input"> min
+        </div>
+        <div class="fun-btn-row">
+          <button class="fun-btn" id="alarmSetBtn" onclick="setAlarm()">▶ SET</button>
+          <button class="fun-btn stop-fun-btn" id="alarmCancelBtn" onclick="cancelAlarm()" disabled>■ CANCEL</button>
+        </div>
+      </div>
+
+      <!-- Background Music Sync -->
+      <div class="fun-card" id="musicCard">
+        <div class="fun-card-title">&#127925; BG MUSIC SYNC</div>
+        <div class="fun-card-sub">Upload or drop an audio file</div>
+        <input type="file" id="musicFileInput" accept="audio/*" style="display:none" onchange="loadMusicFile(this)">
+        <div class="fun-btn-row">
+          <button class="fun-btn" id="musicStartBtn" onclick="document.getElementById('musicFileInput').click()">&#128190; FILE</button>
+          <button class="fun-btn stop-fun-btn" id="musicStopBtn" onclick="stopMusic()" disabled>&#9632; STOP</button>
+        </div>
+        <div class="fun-card-sub" id="musicFileName" style="margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+      </div>
+
+      <!-- Device Mic Sync -->
+      <div class="fun-card" id="micCard">
+        <div class="fun-card-title">&#127908; MIC SYNC</div>
+        <div class="fun-card-sub">Reacts to device microphone</div>
+        <div class="fun-btn-row">
+          <button class="fun-btn" id="micStartBtn" onclick="startMic()">&#9654; START</button>
+          <button class="fun-btn stop-fun-btn" id="micStopBtn" onclick="stopMic()" disabled>&#9632; STOP</button>
+        </div>
+      </div>
+
+      <!-- Screen Sync -->
+      <div class="fun-card" id="screenCard">
+        <div class="fun-card-title">&#128421;&#65039; SCREEN SYNC</div>
+        <div class="fun-card-sub">Matches screen color (PC only)</div>
+        <div class="fun-btn-row">
+          <button class="fun-btn" id="screenStartBtn" onclick="startScreenSync()">&#9654; START</button>
+          <button class="fun-btn stop-fun-btn" id="screenStopBtn" onclick="stopScreenSync()" disabled>&#9632; STOP</button>
+        </div>
+      </div>
+
+      <!-- Candle Mode -->
+      <div class="fun-card" id="candleCard">
+        <div class="fun-card-title">🕯️ CANDLE MODE</div>
+        <div class="fun-card-sub">Warm flickering flame</div>
+        <div class="fun-btn-row">
+          <button class="fun-btn" id="candleStartBtn" onclick="startCandle()">▶ LIGHT</button>
+          <button class="fun-btn stop-fun-btn" id="candleStopBtn" onclick="stopCandle()" disabled>■ STOP</button>
+        </div>
+      </div>
+
+      <!-- Random Color -->
+      <div class="fun-card">
+        <div class="fun-card-title">🎲 RANDOM COLOR</div>
+        <div class="fun-card-sub">Surprise me!</div>
+        <div class="fun-btn-row">
+          <button class="fun-btn full-btn" onclick="randomColor()">🎲 ROLL</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── schedule ── -->
+  <section class="section">
+    <div class="section-label">SCHEDULE</div>
+    <div class="schedule-wrap">
+      <div class="schedule-row">
+        <span class="sch-lbl">Turn ON at</span>
+        <input type="time" id="onTime" class="time-input" value="07:00">
+        <button class="btn-sm" id="onSetBtn" onclick="setSchedule('on')">SET</button>
+        <button class="btn-sm stop-sch-btn" id="onCancelBtn" onclick="cancelSchedule('on')" style="display:none">✕</button>
+      </div>
+      <div class="schedule-row">
+        <span class="sch-lbl">Turn OFF at</span>
+        <input type="time" id="offTime" class="time-input" value="23:00">
+        <button class="btn-sm" id="offSetBtn" onclick="setSchedule('off')">SET</button>
+        <button class="btn-sm stop-sch-btn" id="offCancelBtn" onclick="cancelSchedule('off')" style="display:none">✕</button>
+      </div>
+      <div class="schedule-info" id="schedInfo">No schedules active</div>
+    </div>
+  </section>
+
+  <!-- ── toast ── -->
+  <div class="toast" id="toast"></div>
+
+</div><!-- /app -->
+
+<script>
+// ── state ──────────────────────────────────────────────────────
+let currentColor = '#ff8c00';
+let isOn = true;
+let partyActive = false;
+let musicActive = false;   // background music file
+let micActive = false;     // device mic sync
+let screenSyncActive = false;
+let candleActive = false;
+let alarmActive = false;
+
+// which mode is active: 'scene', 'effect', or null
+let activeMode = null;
+let activeScene = null;
+let activeEffect = 0;
+
+// audio refs
+let musicAnimFrame = null;
+let micAnimFrame = null;
+let screenAnimFrame = null;
+let screenIntervalId = null;
+let audioContext = null;
+let analyser = null;
+let audioStream = null;
+let musicAudioEl = null;
+let musicSourceNode = null;
+let micAnalyser = null;
+let micStream = null;
+let micAudioCtx = null;
+
+let schedules = {};
+let scheduleTimers = {};
+
+// ── send helper ─────────────────────────────────────────────────
+async function send(command) {
+  try {
+    const res = await fetch('/control', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({command})
+    });
+    const data = await res.json();
+    if (data.state) syncState(data.state);
+    return data;
+  } catch(e) {
+    toast('Connection error', 'error');
+  }
+}
+
+function syncState(s) {
+  isOn = s.on;
+  document.getElementById('powerBtn').classList.toggle('off', !isOn);
+  document.getElementById('statusDot').className = 'status-dot ' + (isOn ? 'on' : 'off');
+  document.getElementById('statusLabel').textContent = isOn ? 'LIVE' : 'OFF';
+  if (s.color) {
+    const hex = rgbToHex(s.color[0], s.color[1], s.color[2]);
+    updateColorUI(hex);
+  }
+  if (typeof s.party_active !== 'undefined') {
+    partyActive = s.party_active;
+    setFunBtnState('party', partyActive);
+    document.getElementById('partyCard').classList.toggle('party-active', partyActive);
+  }
+  if (typeof s.alarm_active !== 'undefined') {
+    alarmActive = s.alarm_active;
+    setFunBtnState('alarm', alarmActive);
+    document.getElementById('alarmCard').classList.toggle('alarm-active', alarmActive);
+  }
+  if (typeof s.candle_active !== 'undefined') {
+    candleActive = s.candle_active;
+    setFunBtnState('candle', candleActive);
+  }
+}
+
+function setFunBtnState(feature, active) {
+  const startBtn = document.getElementById(feature + 'StartBtn');
+  const stopBtn  = document.getElementById(feature + 'StopBtn');
+  if (startBtn) startBtn.disabled = active;
+  if (stopBtn)  stopBtn.disabled  = !active;
+}
+
+// ── power ───────────────────────────────────────────────────────
+function toggle() { send('TOGGLE'); }
+
+// ── color wheel ─────────────────────────────────────────────────
+const canvas = document.getElementById('colorWheel');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height, cx = W/2, cy = H/2, radius = W/2 - 8;
+
+function drawWheel() {
+  for (let angle = 0; angle < 360; angle += 0.5) {
+    const rad = (angle * Math.PI) / 180;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, 'white');
+    grad.addColorStop(1, `hsl(${angle},100%,50%)`);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, rad, rad + 0.02);
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+  const darkGrad = ctx.createRadialGradient(cx, cy, radius*0.6, cx, cy, radius);
+  darkGrad.addColorStop(0, 'transparent');
+  darkGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI*2);
+  ctx.fillStyle = darkGrad;
+  ctx.fill();
+}
+drawWheel();
+
+function getColorFromEvent(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width, scaleY = H / rect.height;
+  const x = (clientX - rect.left) * scaleX;
+  const y = (clientY - rect.top) * scaleY;
+  const dx = x - cx, dy = y - cy;
+  if (Math.sqrt(dx*dx+dy*dy) > radius) return null;
+  const pixel = ctx.getImageData(x, y, 1, 1).data;
+  return rgbToHex(pixel[0], pixel[1], pixel[2]);
+}
+
+canvas.addEventListener('click', e => {
+  const hex = getColorFromEvent(e.clientX, e.clientY);
+  if (hex) pickColor(hex);
+});
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  const hex = getColorFromEvent(t.clientX, t.clientY);
+  if (hex) updateColorUI(hex);
+}, {passive: false});
+canvas.addEventListener('touchend', e => {
+  const t = e.changedTouches[0];
+  const hex = getColorFromEvent(t.clientX, t.clientY);
+  if (hex) pickColor(hex);
+});
+
+function pickColor(hex) {
+  updateColorUI(hex);
+  send('COLOR:' + hex);
+}
+function updateColorUI(hex) {
+  currentColor = hex;
+  document.getElementById('colorPreview').style.background = hex;
+  document.getElementById('hexLabel').textContent = hex.toUpperCase();
+  document.getElementById('hexPicker').value = hex;
+  document.getElementById('ambientBg').style.background =
+    `radial-gradient(ellipse at 50% 0%, ${hex}44 0%, transparent 70%)`;
+}
+function copyHex() {
+  navigator.clipboard.writeText(currentColor).then(() => toast('Hex copied!'));
+}
+
+// ── brightness ──────────────────────────────────────────────────
+function updateBri(v) { document.getElementById('briVal').textContent = v; }
+function sendBri(v) { send('BRI:' + v); }
+
+// ── color temp ──────────────────────────────────────────────────
+function updateTemp(v) {
+  const labels = ['WARM','SOFT','NEUTRAL','COOL','DAYLIGHT'];
+  document.getElementById('tempVal').textContent = labels[Math.floor(v/64)] || 'DAYLIGHT';
+}
+function sendTemp(v) { send('TEMP:' + v); }
+
+// ── MUTUAL EXCLUSION: scene <-> effect ─────────────────────────
+// When a scene is activated, clear any active effect highlight.
+// When an effect is activated, clear any active scene highlight.
+
+function clearSceneUI() {
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sceneStopBtn').style.display = 'none';
+  activeScene = null;
+}
+function clearEffectUI() {
+  document.querySelectorAll('.fx-btn').forEach(b => {
+    b.classList.toggle('active', +b.dataset.fx === 0);
+  });
+  activeEffect = 0;
+}
+
+// ── effects ─────────────────────────────────────────────────────
+function fx(n, pal) {
+  // Clear any active scene when an effect (non-solid) is chosen
+  if (n !== 0 && activeScene) {
+    clearSceneUI();
+    toast('Scene cleared — effect active');
+  }
+  activeEffect = n;
+  activeMode = n === 0 ? null : 'effect';
+  document.querySelectorAll('.fx-btn').forEach(b => b.classList.toggle('active', +b.dataset.fx === n));
+  // Include optional palette (e.g. pal=11 for the Rainbow palette)
+  const cmd = (pal !== undefined) ? 'FX:' + n + ':' + pal : 'FX:' + n;
+  send(cmd);
+}
+
+// ── scenes ──────────────────────────────────────────────────────
+function scene(name) {
+  // Clear any active effect when a scene is chosen
+  if (activeMode === 'effect' && activeEffect !== 0) {
+    clearEffectUI();
+    // No toast needed — scene toast below is enough
+  }
+  activeScene = name;
+  activeMode = 'scene';
+  document.querySelectorAll('.scene-btn').forEach(b => b.classList.toggle('active', b.dataset.scene === name));
+  document.getElementById('sceneStopBtn').style.display = 'inline-flex';
+  send('SCENE:' + name);
+  toast('Scene: ' + name.charAt(0).toUpperCase() + name.slice(1));
+}
+function stopScene() {
+  clearSceneUI();
+  activeMode = null;
+  fx(0); // back to solid — also resets effect buttons
+  toast('Scene cleared');
+}
+
+// ── party mode ──────────────────────────────────────────────────
+function startParty() {
+  partyActive = true;
+  setFunBtnState('party', true);
+  document.getElementById('partyCard').classList.add('party-active');
+  send('PARTY');
+  toast('Party mode ON!');
+}
+function stopParty() {
+  partyActive = false;
+  setFunBtnState('party', false);
+  document.getElementById('partyCard').classList.remove('party-active');
+  send('STOP_PARTY');
+  toast('Party stopped');
+}
+
+// ── alarm ────────────────────────────────────────────────────────
+function setAlarm() {
+  const mins = parseInt(document.getElementById('alarmMins').value);
+  if (isNaN(mins) || mins < 1) { toast('Enter valid minutes', 'error'); return; }
+  alarmActive = true;
+  setFunBtnState('alarm', true);
+  document.getElementById('alarmCard').classList.add('alarm-active');
+  send('ALARM:' + mins);
+  toast('Sunrise alarm in ' + mins + ' min');
+}
+function cancelAlarm() {
+  alarmActive = false;
+  setFunBtnState('alarm', false);
+  document.getElementById('alarmCard').classList.remove('alarm-active');
+  send('CANCEL_ALARM');
+  toast('Alarm cancelled');
+}
+
+// ── candle mode ───────────────────────────────────────────────────
+function startCandle() {
+  candleActive = true;
+  setFunBtnState('candle', true);
+  send('CANDLE_ON');
+  toast('Candle mode ON');
+}
+function stopCandle() {
+  candleActive = false;
+  setFunBtnState('candle', false);
+  send('CANDLE_OFF');
+  toast('Candle off');
+}
+
+// ── random color ─────────────────────────────────────────────────
+function randomColor() {
+  const h = Math.floor(Math.random()*360);
+  const hex = hslToHex(h, 85, 55);
+  pickColor(hex);
+  toast('Random: ' + hex.toUpperCase());
+}
+
+// ════════════════════════════════════════════════════════════════
+//  BACKGROUND MUSIC SYNC (audio file → Web Audio API)
+//  Works on PC and mobile (any browser that supports Web Audio).
+//  The user picks a local audio file; the analyser reads its
+//  frequency data and maps it to LED colour + brightness.
+// ════════════════════════════════════════════════════════════════
+function loadMusicFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  stopMusic(); // stop any previous session
+  const url = URL.createObjectURL(file);
+  musicAudioEl = new Audio();
+  musicAudioEl.src = url;
+  musicAudioEl.loop = true;
+  musicAudioEl.crossOrigin = 'anonymous';
+  musicAudioEl.play().then(() => {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      musicSourceNode = audioContext.createMediaElementSource(musicAudioEl);
+      musicSourceNode.connect(analyser);
+      analyser.connect(audioContext.destination); // so you can still hear it
+      musicActive = true;
+      setFunBtnState('music', true);
+      document.getElementById('musicCard').classList.add('music-active');
+      document.getElementById('musicFileName').textContent = file.name;
+      toast('BG Music sync ON');
+      musicLoop();
+    } catch(e) {
+      toast('Audio API error: ' + e.message, 'error');
+    }
+  }).catch(e => {
+    toast('Cannot play file: ' + e.message, 'error');
+  });
+}
+
+function stopMusic() {
+  musicActive = false;
+  if (musicAnimFrame) { cancelAnimationFrame(musicAnimFrame); musicAnimFrame = null; }
+  if (musicAudioEl) { musicAudioEl.pause(); musicAudioEl = null; }
+  if (musicSourceNode) { try { musicSourceNode.disconnect(); } catch(e) {} musicSourceNode = null; }
+  if (audioContext) { try { audioContext.close(); } catch(e) {} audioContext = null; }
+  analyser = null;
+  setFunBtnState('music', false);
+  document.getElementById('musicCard').classList.remove('music-active');
+  document.getElementById('musicFileName').textContent = '';
+  // reset the file input so the same file can be re-selected
+  document.getElementById('musicFileInput').value = '';
+  toast('Music sync off');
+}
+
+let lastMusicSend = 0;
+function musicLoop() {
+  if (!musicActive || !analyser) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const avg  = data.reduce((a,b) => a+b, 0) / data.length;
+  const bri  = Math.min(255, Math.floor(avg * 3));
+  const bass = data.slice(0, 8).reduce((a,b) => a+b, 0) / 8;
+  const hue  = Math.floor((bass / 255) * 360);
+  const hex  = hslToHex(hue, 100, 50);
+  const now  = Date.now();
+  if (now - lastMusicSend > 150 && avg > 5) {
+    lastMusicSend = now;
+    fetch('/control', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:'COLOR:'+hex})});
+    if (bri > 20) fetch('/control', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:'BRI:'+bri})});
+    updateColorUI(hex);
+  }
+  musicAnimFrame = requestAnimationFrame(musicLoop);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  DEVICE MIC SYNC (getUserMedia microphone)
+//  Works on PC and mobile when served over HTTPS or localhost.
+// ════════════════════════════════════════════════════════════════
+async function startMic() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Mic not supported (need HTTPS)', 'error'); return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({audio: true, video: false});
+    micAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micAnalyser = micAudioCtx.createAnalyser();
+    micAnalyser.fftSize = 256;
+    const src = micAudioCtx.createMediaStreamSource(micStream);
+    src.connect(micAnalyser);
+    // NOTE: do NOT connect to destination — avoids feedback loop
+    micActive = true;
+    setFunBtnState('mic', true);
+    document.getElementById('micCard').classList.add('mic-active');
+    toast('Mic sync ON — make some noise!');
+    micLoop();
+  } catch(e) {
+    if (e.name === 'NotAllowedError') {
+      toast('Mic permission denied', 'error');
+    } else {
+      toast('Mic error: ' + e.message, 'error');
+    }
+  }
+}
+
+function stopMic() {
+  micActive = false;
+  if (micAnimFrame) { cancelAnimationFrame(micAnimFrame); micAnimFrame = null; }
+  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (micAudioCtx) { try { micAudioCtx.close(); } catch(e) {} micAudioCtx = null; }
+  micAnalyser = null;
+  setFunBtnState('mic', true); // re-enable start
+  setFunBtnState('mic', false); // normal stop state
+  document.getElementById('micCard').classList.remove('mic-active');
+  toast('Mic sync off');
+}
+
+let lastMicSend = 0;
+function micLoop() {
+  if (!micActive || !micAnalyser) return;
+  const data = new Uint8Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getByteFrequencyData(data);
+  const avg  = data.reduce((a,b) => a+b, 0) / data.length;
+  const bri  = Math.min(255, Math.floor(avg * 4));
+  const bass = data.slice(0, 8).reduce((a,b) => a+b, 0) / 8;
+  const hue  = Math.floor((bass / 255) * 360);
+  const hex  = hslToHex(hue, 100, 50);
+  const now  = Date.now();
+  if (now - lastMicSend > 150 && avg > 3) {
+    lastMicSend = now;
+    fetch('/control', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:'COLOR:'+hex})});
+    if (bri > 10) fetch('/control', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command:'BRI:'+bri})});
+    updateColorUI(hex);
+  }
+  micAnimFrame = requestAnimationFrame(micLoop);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  SCREEN SYNC
+//  Requires: PC browser (Chrome/Edge), served over HTTPS or localhost.
+//  getDisplayMedia is blocked on most mobile browsers by design.
+// ════════════════════════════════════════════════════════════════
+let screenVideoEl = null;
+async function startScreenSync() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    toast('Screen share needs PC + Chrome/Edge + HTTPS', 'error');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: 10, max: 15 } },
+      audio: false
+    });
+    screenVideoEl = document.createElement('video');
+    screenVideoEl.srcObject = stream;
+    screenVideoEl.muted = true;
+    screenVideoEl.autoplay = true;
+    screenVideoEl.playsinline = true;
+
+    // Wait for video to actually be playing before sampling begins
+    await new Promise((resolve) => {
+      screenVideoEl.addEventListener('playing', resolve, { once: true });
+      screenVideoEl.play().catch(() => {});
+      setTimeout(resolve, 2000); // fallback timeout
+    });
+
+    // Larger canvas = far more accurate colour average (2304 px vs 144 px)
+    const offCanvas = document.createElement('canvas');
+    offCanvas.width = 64; offCanvas.height = 36;
+    // willReadFrequently avoids slow GPU→CPU readback on every getImageData call
+    const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+
+    screenSyncActive = true;
+    setFunBtnState('screen', true);
+    document.getElementById('screenCard').classList.add('screen-active');
+    toast('Screen sync ON!');
+
+    let lastScreenSend = 0;
+    let lastR = -1, lastG = -1, lastB = -1;
+
+    function screenTick() {
+      if (!screenSyncActive) return;
+      try {
+        // readyState >= 3 = HAVE_FUTURE_DATA, guarantees a fresh frame
+        if (screenVideoEl && screenVideoEl.readyState >= 3) {
+          offCtx.drawImage(screenVideoEl, 0, 0, 64, 36);
+          const d = offCtx.getImageData(0, 0, 64, 36).data;
+          let r = 0, g = 0, b = 0, count = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            r += d[i]; g += d[i + 1]; b += d[i + 2]; count++;
+          }
+          r = Math.floor(r / count);
+          g = Math.floor(g / count);
+          b = Math.floor(b / count);
+
+          // Sum of absolute channel differences — fast colour-change detector
+          const colorDiff = Math.abs(r - lastR) + Math.abs(g - lastG) + Math.abs(b - lastB);
+          const now = Date.now();
+
+          // Two send paths:
+          //   • colorDiff > 25  → immediate send (screen colour changed noticeably)
+          //   • colorDiff > 3   → send every 80 ms for gradual/slow changes
+          if (colorDiff > 25 || (colorDiff > 3 && now - lastScreenSend > 80)) {
+            lastR = r; lastG = g; lastB = b;
+            lastScreenSend = now;
+            const hex = rgbToHex(r, g, b);
+            fetch('/control', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ command: 'COLOR:' + hex })
+            });
+            updateColorUI(hex);
+          }
+        }
+      } catch(e) {
+        // Frame not ready yet — skip this tick
+      }
+    }
+
+    // setInterval is far more reliable than rAF for screen capture:
+    // rAF can be throttled/paused by the browser when the tab loses focus,
+    // whereas setInterval keeps running as long as the page is loaded.
+    screenIntervalId = setInterval(screenTick, 80); // ~12 fps polling
+
+    // Auto-stop when user ends the share from the browser chrome
+    stream.getVideoTracks()[0].addEventListener('ended', () => stopScreenSync());
+
+  } catch(e) {
+    if (e.name === 'NotAllowedError') {
+      toast('Screen share permission denied', 'error');
+    } else if (e.name === 'NotSupportedError') {
+      toast('Screen share not supported here (need HTTPS + PC)', 'error');
+    } else {
+      toast('Screen share error: ' + e.message, 'error');
+    }
+  }
+}
+
+function stopScreenSync() {
+  screenSyncActive = false;
+  if (screenIntervalId) { clearInterval(screenIntervalId); screenIntervalId = null; }
+  if (screenAnimFrame)  { cancelAnimationFrame(screenAnimFrame); screenAnimFrame = null; }
+  if (screenVideoEl && screenVideoEl.srcObject) {
+    screenVideoEl.srcObject.getTracks().forEach(t => t.stop());
+    screenVideoEl.srcObject = null;
+    screenVideoEl = null;
+  }
+  setFunBtnState('screen', false);
+  document.getElementById('screenCard').classList.remove('screen-active');
+  toast('Screen sync off');
+}
+
+// ── schedule ─────────────────────────────────────────────────────
+function setSchedule(type) {
+  const timeVal = document.getElementById(type === 'on' ? 'onTime' : 'offTime').value;
+  const [h, m] = timeVal.split(':').map(Number);
+  if (scheduleTimers[type]) clearTimeout(scheduleTimers[type]);
+  schedules[type] = {h, m, timeVal};
+  function scheduleNext() {
+    const now = new Date();
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    if (target <= now) target.setDate(target.getDate() + 1);
+    const delay = target - now;
+    scheduleTimers[type] = setTimeout(() => {
+      send(type === 'on' ? 'ON' : 'OFF');
+      toast('Scheduled ' + type.toUpperCase() + ' triggered!');
+      scheduleNext();
+    }, delay);
+  }
+  scheduleNext();
+  document.getElementById(type + 'CancelBtn').style.display = 'inline-flex';
+  updateSchedInfo();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  toast('LED turns ' + type.toUpperCase() + ' at ' + h12 + ':' + String(m).padStart(2,'0') + ' ' + ampm);
+}
+function cancelSchedule(type) {
+  if (scheduleTimers[type]) { clearTimeout(scheduleTimers[type]); delete scheduleTimers[type]; }
+  delete schedules[type];
+  document.getElementById(type + 'CancelBtn').style.display = 'none';
+  updateSchedInfo();
+  toast(type.toUpperCase() + ' schedule cancelled');
+}
+function updateSchedInfo() {
+  const parts = [];
+  ['on','off'].forEach(type => {
+    if (schedules[type]) {
+      const {h, m} = schedules[type];
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      parts.push(type.toUpperCase() + ' at ' + h12 + ':' + String(m).padStart(2,'0') + ' ' + ampm);
+    }
+  });
+  document.getElementById('schedInfo').textContent = parts.length ? parts.join(' · ') : 'No schedules active';
+}
+
+// ── voice control ─────────────────────────────────────────────────
+let recognition = null;
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast('Voice not supported on this browser', 'error'); return; }
+  if (recognition) { recognition.stop(); return; }
+  recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 3;
+  recognition.onstart = () => {
+    document.getElementById('voiceBanner').classList.add('listening');
+    document.getElementById('voiceHint').textContent = 'Listening...';
+    document.getElementById('voiceWaves').classList.add('active');
+  };
+  recognition.onend = () => {
+    recognition = null;
+    document.getElementById('voiceBanner').classList.remove('listening');
+    document.getElementById('voiceHint').textContent = 'Tap to speak a command';
+    document.getElementById('voiceWaves').classList.remove('active');
+  };
+  recognition.onresult = e => {
+    const transcript = e.results[0][0].transcript.toLowerCase().trim();
+    document.getElementById('voiceHint').textContent = '"' + transcript + '"';
+    handleVoice(transcript);
+  };
+  recognition.onerror = () => { toast('Voice error — try again', 'error'); recognition = null; };
+  recognition.start();
+}
+
+function handleVoice(t) {
+  if (t.includes('turn on') || t.includes('lights on'))       { send('ON'); toast('Voice: ON'); }
+  else if (t.includes('turn off') || t.includes('lights off')) { send('OFF'); toast('Voice: OFF'); }
+  else if (t.includes('red'))    { pickColor('#ff0000'); toast('Voice: Red'); }
+  else if (t.includes('green'))  { pickColor('#00ff00'); toast('Voice: Green'); }
+  else if (t.includes('blue'))   { pickColor('#0000ff'); toast('Voice: Blue'); }
+  else if (t.includes('white'))  { pickColor('#ffffff'); toast('Voice: White'); }
+  else if (t.includes('yellow')) { pickColor('#ffd700'); toast('Voice: Yellow'); }
+  else if (t.includes('purple')) { pickColor('#8800ff'); toast('Voice: Purple'); }
+  else if (t.includes('orange')) { pickColor('#ff6600'); toast('Voice: Orange'); }
+  else if (t.includes('pink'))   { pickColor('#ff0099'); toast('Voice: Pink'); }
+  else if (t.includes('cyan'))   { pickColor('#00ffcc'); toast('Voice: Cyan'); }
+  else if (t.includes('brighter'))  { const s=document.getElementById('briSlider'); s.value=Math.min(255,+s.value+50); send('BRI:'+s.value); toast('Brighter'); }
+  else if (t.includes('dimmer') || t.includes('dim')) { const s=document.getElementById('briSlider'); s.value=Math.max(1,+s.value-50); send('BRI:'+s.value); toast('Dimmer'); }
+  else if (t.includes('full brightness')) { document.getElementById('briSlider').value=255; send('BRI:255'); toast('Full brightness'); }
+  else if (t.includes('sunset'))   { scene('sunset'); }
+  else if (t.includes('ocean'))    { scene('ocean'); }
+  else if (t.includes('forest'))   { scene('forest'); }
+  else if (t.includes('romantic')) { scene('romantic'); }
+  else if (t.includes('focus') || t.includes('work')) { scene('focus'); }
+  else if (t.includes('sleep') || t.includes('bedtime')) { scene('sleep'); }
+  else if (t.includes('morning'))  { scene('morning'); }
+  else if (t.includes('cinema') || t.includes('movie')) { scene('cinema'); }
+  else if (t.includes('gaming') || t.includes('game'))  { scene('gaming'); }
+  else if (t.includes('party'))     { partyActive ? stopParty() : startParty(); }
+  else if (t.includes('rave'))      { scene('rave'); }
+  else if (t.includes('christmas')) { scene('christmas'); }
+  else if (t.includes('halloween')) { scene('halloween'); }
+  else if (t.includes('rainbow'))   { fx(9, 11); toast('Voice: Rainbow'); }
+  else if (t.includes('fire'))      { fx(45); toast('Voice: Fire'); }
+  else if (t.includes('strobe'))    { fx(46); toast('Voice: Strobe'); }
+  else if (t.includes('breathe'))   { fx(2); toast('Voice: Breathe'); }
+  else if (t.includes('sparkle'))   { fx(65); toast('Voice: Sparkle'); }
+  else if (t.includes('firework'))  { fx(91); toast('Voice: Fireworks'); }
+  else if (t.includes('random'))    { randomColor(); }
+  else if (t.includes('solid'))     { fx(0); toast('Voice: Solid'); }
+  else if (t.includes('candle'))    { candleActive ? stopCandle() : startCandle(); }
+  else { toast('Try: "turn on", "red", "sunset"...', 'error'); }
+}
+
+// ── keyboard shortcuts ─────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const map = {
+    ' ': () => toggle(),
+    'r': () => randomColor(),
+    'p': () => partyActive ? stopParty() : startParty(),
+    'v': () => startVoice(),
+    'ArrowUp': () => { const s=document.getElementById('briSlider'); s.value=Math.min(255,+s.value+10); updateBri(s.value); send('BRI:'+s.value); },
+    'ArrowDown': () => { const s=document.getElementById('briSlider'); s.value=Math.max(1,+s.value-10); updateBri(s.value); send('BRI:'+s.value); },
+  };
+  if (map[e.key]) { e.preventDefault(); map[e.key](); }
+});
+
+// ── toast ────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── init ───────────────────────────────────────────────────────
+setTimeout(() => {
+  document.getElementById('statusDot').className = 'status-dot on';
+  document.getElementById('statusLabel').textContent = 'LIVE';
+  updateColorUI('#ff8c00');
+}, 800);
+
+// ── utils ─────────────────────────────────────────────────────────
+function rgbToHex(r,g,b) {
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function hslToHex(h,s,l) {
+  s/=100;l/=100;
+  const k=n=>(n+h/30)%12, a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
+  return rgbToHex(Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255));
+}
+function isLightColor(hex) {
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return (r*299+g*587+b*114)/1000 > 128;
+}
+</script>
+</body>
+</html>

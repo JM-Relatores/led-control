@@ -297,6 +297,22 @@
     </div>
   </section>
 
+  <!-- ── debug log ── -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-label">DEBUG LOG</div>
+      <button class="debug-toggle-btn" id="debugToggleBtn" onclick="toggleDebugLog()" title="Show/hide debug log">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+    <div class="debug-log-wrap" id="debugLogWrap" style="display:none;">
+      <div class="debug-log-container" id="debugLogContainer"></div>
+      <button class="debug-clear-btn" onclick="clearDebugLog()">Clear Log</button>
+    </div>
+  </section>
+
   <!-- ── toast ── -->
   <div class="toast" id="toast"></div>
 
@@ -1062,6 +1078,85 @@ async function sendWifiConfig() {
     `;
   }
 }
+
+// ── debug log ─────────────────────────────────────────────────────
+
+let debugLogOpen = false;
+let lastDebugCount = 0;
+
+function toggleDebugLog() {
+  const wrap = document.getElementById('debugLogWrap');
+  const btn = document.getElementById('debugToggleBtn');
+  debugLogOpen = !debugLogOpen;
+  wrap.style.display = debugLogOpen ? 'flex' : 'none';
+  btn.classList.toggle('open', debugLogOpen);
+}
+
+function clearDebugLog() {
+  document.getElementById('debugLogContainer').innerHTML = '';
+  lastDebugCount = 0;
+}
+
+async function fetchDebugLog() {
+  try {
+    const res = await fetch('/debug');
+    const data = await res.json();
+    
+    if (!data.logs) return;
+    
+    // Only update if there are new messages
+    if (data.logs.length === lastDebugCount && lastDebugCount > 0) return;
+    
+    lastDebugCount = data.logs.length;
+    const container = document.getElementById('debugLogContainer');
+    
+    // Clear and rebuild
+    container.innerHTML = '';
+    
+    data.logs.forEach(log => {
+      const entry = document.createElement('div');
+      entry.className = 'debug-log-entry';
+      
+      // Determine message type from content
+      let msgClass = 'info';
+      if (log.msg.includes('[ERROR]') || log.msg.includes('✗')) msgClass = 'error';
+      else if (log.msg.includes('[SAVE]') || log.msg.includes('✓')) msgClass = 'success';
+      else if (log.msg.includes('[WARN]') || log.msg.includes('⚠')) msgClass = 'warning';
+      else if (log.msg.includes('[SYSTEM]') || log.msg.includes('[INFO]')) msgClass = 'system';
+      else if (log.msg.includes('[MQTT]') || log.msg.includes('[WIFI]') || log.msg.includes('[AP]')) msgClass = 'info';
+      
+      entry.innerHTML = `
+        <span class="debug-log-time">${log.time}</span>
+        <span class="debug-log-msg ${msgClass}">${escapeHtml(log.msg)}</span>
+      `;
+      container.appendChild(entry);
+    });
+    
+    // Auto-scroll to bottom
+    container.scrollTop = container.scrollHeight;
+  } catch (e) {
+    console.error('Debug log error:', e);
+  }
+}
+
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Poll debug log every 500ms if open
+setInterval(() => {
+  if (debugLogOpen) {
+    fetchDebugLog();
+  }
+}, 500);
+
 </script>
 </body>
 </html>

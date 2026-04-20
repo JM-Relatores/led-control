@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>LUNIQUE — LED Control</title>
+<title>UNIQUE — LED Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
@@ -247,6 +247,53 @@
         <button class="btn-sm stop-sch-btn" id="offCancelBtn" onclick="cancelSchedule('off')" style="display:none">✕</button>
       </div>
       <div class="schedule-info" id="schedInfo">No schedules active</div>
+    </div>
+  </section>
+
+  <!-- ── wifi config ── -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-label">WIFI CONFIG</div>
+      <div class="section-sublabel" style="font-size:.75rem;color:#666;margin-top:.2rem;">
+        Change ESP32 WiFi without going to WLED
+      </div>
+    </div>
+    <div class="wifi-config-wrap">
+      <div class="wifi-field">
+        <label class="wifi-label" for="wifiSSID">WiFi Name (SSID)</label>
+        <input type="text" id="wifiSSID" class="wifi-input"
+               placeholder="Your WiFi network name"
+               autocomplete="off" spellcheck="false">
+      </div>
+      <div class="wifi-field">
+        <label class="wifi-label" for="wifiPass">Password</label>
+        <div class="wifi-pass-wrap">
+          <input type="password" id="wifiPass" class="wifi-input"
+                 placeholder="WiFi password"
+                 autocomplete="new-password">
+          <button class="wifi-eye-btn" id="wifiEyeBtn"
+                  onclick="toggleWifiPassVisibility()"
+                  title="Show/hide password">
+            <svg id="wifiEyeIcon" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <button class="wifi-send-btn" id="wifiSendBtn" onclick="sendWifiConfig()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" width="16" height="16" style="margin-right:.5rem">
+          <path d="M1.42 1.42L22.58 12 1.42 22.58V1.42z"/>
+        </svg>
+        SEND TO ESP32
+      </button>
+      <div class="wifi-status" id="wifiStatus"></div>
+      <div class="wifi-note">
+        ⚠ ESP32 will reboot after receiving new credentials.
+        LED control will be unavailable for ~10 seconds.
+      </div>
     </div>
   </section>
 
@@ -936,6 +983,84 @@ function hslToHex(h,s,l) {
 function isLightColor(hex) {
   const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
   return (r*299+g*587+b*114)/1000 > 128;
+}
+
+// ── wifi config ──────────────────────────────────────────────────
+
+function toggleWifiPassVisibility() {
+  const input = document.getElementById('wifiPass');
+  const icon  = document.getElementById('wifiEyeIcon');
+  if (input.type === 'password') {
+    input.type = 'text';
+    // Change to "eye-off" icon
+    icon.innerHTML = `
+      <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8
+               a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112
+               4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07
+               a3 3 0 11-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    `;
+  } else {
+    input.type = 'password';
+    // Restore "eye" icon
+    icon.innerHTML = `
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    `;
+  }
+}
+
+async function sendWifiConfig() {
+  const ssid = document.getElementById('wifiSSID').value.trim();
+  const pass = document.getElementById('wifiPass').value;
+  const btn  = document.getElementById('wifiSendBtn');
+  const statusEl = document.getElementById('wifiStatus');
+
+  if (!ssid) {
+    statusEl.textContent = 'Please enter a WiFi name.';
+    statusEl.className = 'wifi-status error';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  statusEl.textContent = 'Sending WiFi config to ESP32...';
+  statusEl.className = 'wifi-status loading';
+
+  try {
+    const res = await fetch('/wifi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password: pass })
+    });
+
+    const data = await res.json();
+
+    if (data.status === 'ok') {
+      statusEl.textContent = '✓ Sent! ESP32 is rebooting (~10 sec)...';
+      statusEl.className = 'wifi-status success';
+      document.getElementById('wifiSSID').value = '';
+      document.getElementById('wifiPass').value = '';
+      toast('WiFi config sent to ESP32!');
+    } else {
+      statusEl.textContent = '✗ Error: ' + (data.message || 'Unknown error');
+      statusEl.className = 'wifi-status error';
+      toast('WiFi config failed', 'error');
+    }
+  } catch (e) {
+    statusEl.textContent = '✗ Network error. Is the server running?';
+    statusEl.className = 'wifi-status error';
+    toast('Network error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" width="16" height="16" style="margin-right:.5rem">
+        <path d="M1.42 1.42L22.58 12 1.42 22.58V1.42z"/>
+      </svg>
+      SEND TO ESP32
+    `;
+  }
 }
 </script>
 </body>
